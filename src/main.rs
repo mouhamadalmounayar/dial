@@ -1,15 +1,16 @@
 use log::error;
 use simplelog::{Config, WriteLogger};
 use std::fs::File;
+use tui_textarea::{Input, TextArea};
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
-    widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget},
+    widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 fn main() {
@@ -37,11 +38,12 @@ struct Snippet {
     title: String,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum AppMode {
     Select,
     Search,
     Edit,
+    Command,
 }
 
 struct AppState {
@@ -75,23 +77,61 @@ impl App {
             app_state: AppState {
                 snippet_list,
                 selected_index: 0,
-                mode: AppMode::Select,
+                mode: AppMode::Command,
                 should_exit: false,
             },
             view_manager: ViewManager::new(),
         }
     }
 
+    fn switch_mode(&mut self, event: &Event) {
+        match event {
+            Event::Key(key) => match key.code {
+                KeyCode::Char('q') => {
+                    self.app_state.should_exit = true;
+                }
+                KeyCode::Char('e') => {
+                    self.app_state.mode = AppMode::Edit;
+                }
+                KeyCode::Char('s') => {
+                    self.app_state.mode = AppMode::Select;
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
+    fn render_outer_block(&self, f: &mut Frame) -> Rect {
+        let mode_text = format!(" Mode: {:?} ", self.app_state.mode);
+        let help_text = " 🅆 [q] Quit   │   🛈 [s] Select Mode   │   ✎ [e] Edit Mode ";
+        let block = Block::new()
+            .borders(Borders::ALL)
+            .title(" Dial ")
+            .title_alignment(ratatui::layout::Alignment::Center)
+            .title_bottom(mode_text)
+            .title_bottom(help_text);
+        let inner_area = block.inner(f.area());
+        block.render(f.area(), f.buffer_mut());
+        inner_area
+    }
+
     fn run(&mut self, terminal: &mut DefaultTerminal) {
         while self.app_state.should_exit != true {
             let result = terminal.draw(|f: &mut Frame| {
-                let chunks = Layout::new(
+                let inner_area = self.render_outer_block(f);
+                let horizontal_chunks = Layout::new(
                     Direction::Horizontal,
                     vec![Constraint::Percentage(30), Constraint::Percentage(70)],
                 )
-                .split(f.area());
+                .split(inner_area);
                 self.view_manager.snippet_list_component.render(
-                    chunks[0],
+                    horizontal_chunks[0],
+                    f.buffer_mut(),
+                    &self.app_state,
+                );
+                self.view_manager.editor_component.render(
+                    horizontal_chunks[1],
                     f.buffer_mut(),
                     &self.app_state,
                 );
@@ -107,14 +147,20 @@ impl App {
             match result {
                 Ok(event) => match event {
                     Event::Key(key) => match key.code {
-                        KeyCode::Esc => {
-                            self.app_state.should_exit = true;
-                        }
+                        KeyCode::Esc => self.app_state.mode = AppMode::Command,
                         _ => {
+                            if self.app_state.mode == AppMode::Command {
+                                self.switch_mode(&event);
+                            }
                             if self.app_state.mode == AppMode::Select {
                                 self.view_manager
                                     .snippet_list_component
                                     .handle_event(&event, &mut self.app_state)
+                            }
+                            if self.app_state.mode == AppMode::Edit {
+                                self.view_manager
+                                    .editor_component
+                                    .handle_event(&event, &mut self.app_state);
                             }
                         }
                     },
@@ -160,7 +206,7 @@ impl Component for SnippetListComponent {
         let list = List::new(items)
             .block(block)
             .highlight_symbol(" > ")
-            .highlight_style(Style::default().green());
+            .highlight_style(Style::default().light_blue());
         StatefulWidget::render(list, area, buff, &mut self.local_state);
     }
 
@@ -215,14 +261,44 @@ impl From<&Snippet> for ListItem<'_> {
     }
 }
 
+struct EditorComponent {
+    text_area: TextArea<'static>,
+}
+
+impl Component for EditorComponent {
+    fn render(&mut self, area: Rect, buff: &mut Buffer, state: &AppState) {
+        let block = Block::default().borders(Borders::ALL).title(" Editor ");
+        self.text_area.set_block(block);
+        self.text_area
+            .set_line_number_style(Style::default().fg(ratatui::style::Color::LightBlue));
+        self.text_area.render(area, buff);
+    }
+
+    fn handle_event(&mut self, event: &Event, _state: &mut AppState) {
+        let owned_event = event.clone();
+        let input: Input = owned_event.into();
+        self.text_area.input(input);
+    }
+}
+
+impl EditorComponent {
+    fn new() -> Self {
+        EditorComponent {
+            text_area: TextArea::default(),
+        }
+    }
+}
+
 struct ViewManager {
     snippet_list_component: SnippetListComponent,
+    editor_component: EditorComponent,
 }
 
 impl ViewManager {
     fn new() -> Self {
         ViewManager {
             snippet_list_component: SnippetListComponent::new(),
+            editor_component: EditorComponent::new(),
         }
     }
 }
