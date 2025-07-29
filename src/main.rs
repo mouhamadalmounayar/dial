@@ -1,6 +1,7 @@
 use log::error;
 use simplelog::{Config, WriteLogger};
 use std::fs::File;
+use std::usize;
 use tui_textarea::{Input, TextArea};
 
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -64,7 +65,7 @@ impl App {
         let snippet_list = vec![
             Snippet {
                 language: String::from("python"),
-                code: String::from("print()"),
+                code: String::from("print() \n for i in range () "),
                 title: String::from("Print function"),
             },
             Snippet {
@@ -199,10 +200,7 @@ impl Component for SnippetListComponent {
             .snippet_list
             .iter()
             .map(|snippet| ListItem::from(snippet));
-        let block = Block::new()
-            .borders(Borders::all())
-            .title(" Snippets ")
-            .title_alignment(ratatui::layout::Alignment::Center);
+        let block = Block::new().borders(Borders::all()).title(" Snippets ");
         let list = List::new(items)
             .block(block)
             .highlight_symbol(" > ")
@@ -263,11 +261,18 @@ impl From<&Snippet> for ListItem<'_> {
 
 struct EditorComponent {
     text_area: TextArea<'static>,
+    selected_index: Option<usize>,
 }
 
 impl Component for EditorComponent {
     fn render(&mut self, area: Rect, buff: &mut Buffer, state: &AppState) {
         let block = Block::default().borders(Borders::ALL).title(" Editor ");
+        let content = &state.snippet_list[state.selected_index].code;
+        if self.selected_index != Some(state.selected_index) {
+            self.text_area = TextArea::default();
+            self.text_area.insert_str(content);
+            self.selected_index = Some(state.selected_index);
+        }
         self.text_area.set_block(block);
         self.text_area
             .set_line_number_style(Style::default().fg(ratatui::style::Color::LightBlue));
@@ -285,6 +290,7 @@ impl EditorComponent {
     fn new() -> Self {
         EditorComponent {
             text_area: TextArea::default(),
+            selected_index: None,
         }
     }
 }
