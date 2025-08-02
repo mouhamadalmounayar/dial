@@ -1,3 +1,8 @@
+use crate::app::{AppState, Snippet};
+use crate::editor::GapBuffer;
+use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind};
+use ratatui::text::Span;
+use ratatui::widgets::Paragraph;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -5,9 +10,11 @@ use ratatui::{
     text::Line,
     widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
 };
-use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind};
-use tui_textarea::{Input, TextArea};
-use crate::app::{AppState, Snippet};
+use syntect::{
+    easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet, util::LinesWithEndings,
+};
+
+use syntect_tui::into_span;
 
 pub trait Component {
     fn render(&mut self, area: Rect, buff: &mut Buffer, state: &AppState);
@@ -94,37 +101,104 @@ impl From<&Snippet> for ListItem<'_> {
 }
 
 pub struct EditorComponent {
-    text_area: TextArea<'static>,
+    gap_buffer: Option<GapBuffer>,
     selected_index: Option<usize>,
+    pub syntax_set: SyntaxSet,
+    pub theme_set: ThemeSet,
 }
 
 impl Component for EditorComponent {
     fn render(&mut self, area: Rect, buff: &mut Buffer, state: &AppState) {
-        let block = Block::default().borders(Borders::ALL).title(" Editor ");
-        let content = &state.snippet_list[state.selected_index].code;
+        // sync local state with global state by reinitializing the gap_buffer if the selected_index changes.
         if self.selected_index != Some(state.selected_index) {
-            self.text_area = TextArea::default();
-            self.text_area.insert_str(content);
+            let content = state
+                .get_content()
+                .expect("Unexpected state, a snippet must be selected at all times");
+            self.gap_buffer = Some(GapBuffer::from_str(&content[..], 1024));
             self.selected_index = Some(state.selected_index);
         }
-        self.text_area.set_block(block);
-        self.text_area
-            .set_line_number_style(Style::default().fg(ratatui::style::Color::LightBlue));
-        self.text_area.render(area, buff);
+        // render the gap buffer with syntax highlighting.
+        let gap_buffer = self
+            .gap_buffer
+            .as_ref()
+            .expect("Unexpected state, buffer must not be null at this point");
+        let text: String = gap_buffer.buffer.iter().filter(|&&c| c != '\0').collect();
+        let language = &state.snippet_list[state.selected_index].language;
+        let syntax = self.syntax_set.find_syntax_by_extension(&language).unwrap();
+        let mut highlighter =
+            HighlightLines::new(syntax, &self.theme_set.themes["base16-eighties.dark"]);
+        let buffer_widget: Vec<Line> = LinesWithEndings::from(&text)
+            .map(|line| {
+                let spans: Vec<Span> = highlighter
+                    .highlight_line(line, &self.syntax_set)
+                    .unwrap()
+                    .into_iter()
+                    .filter_map(|segment| into_span(segment).ok())
+                    // override underline color style and background
+                    .map(|span| {
+                        let style = span
+                            .style
+                            .underline_color(ratatui::style::Color::Reset)
+                            .bg(ratatui::style::Color::Reset);
+                        Span::styled(span.content, style)
+                    })
+                    .collect();
+                Line::from(spans)
+            })
+            .collect();
+        let block = Block::default().borders(Borders::ALL).title(" Editor ");
+        let paragraph = Paragraph::new(buffer_widget).block(block);
+        paragraph.render(area, buff)
     }
 
     fn handle_event(&mut self, event: &Event, _state: &mut AppState) {
-        let owned_event = event.clone();
-        let input: Input = owned_event.into();
-        self.text_area.input(input);
+        let buffer = self
+            .gap_buffer
+            .as_mut()
+            .expect("Unexpected state, buffer must not be null at this point");
+        match event {
+            Event::Key(key) => {
+                if key.kind == KeyEventKind::Press {
+                    match key.code {
+                        KeyCode::Char(c) => {
+                            buffer.insert_char(c);
+                        }
+                        KeyCode::Enter => {
+                            buffer.insert_char('\n');
+                        }
+                        KeyCode::Backspace => {
+                            buffer.delete_char();
+                        }
+                        KeyCode::Left => {
+                            buffer.move_gap(buffer.gap_start - 1);
+                        }
+                        KeyCode::Right => {
+                            buffer.move_gap(buffer.gap_start + 1);
+                        }
+                        KeyCode::Tab => {
+                            buffer.insert_char(' ');
+                            buffer.insert_char(' ');
+                            buffer.insert_char(' ');
+                            buffer.insert_char(' ');
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }
 
 impl EditorComponent {
     fn new() -> Self {
+        let syntax_set = SyntaxSet::load_defaults_nonewlines();
+        let theme_set = ThemeSet::load_defaults();
         EditorComponent {
-            text_area: TextArea::default(),
+            gap_buffer: None,
             selected_index: None,
+            syntax_set,
+            theme_set,
         }
     }
 }
