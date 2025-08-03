@@ -1,7 +1,7 @@
 use log::error;
 use ratatui::{
     DefaultTerminal, Frame,
-    crossterm::event::{self, Event, KeyCode},
+    crossterm::event::{self, Event, KeyCode, KeyEventKind},
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Widget},
 };
@@ -27,6 +27,9 @@ pub struct AppState {
     pub selected_index: usize,
     pub mode: AppMode,
     pub should_exit: bool,
+    pub cursor_coordinates: (u16, u16),
+    pub current_area: Rect,
+    pub should_show_cursor: bool,
 }
 
 impl AppState {
@@ -62,6 +65,9 @@ impl App {
             selected_index: 0,
             mode: AppMode::Command,
             should_exit: false,
+            cursor_coordinates: (0, 0),
+            current_area: Rect::default(),
+            should_show_cursor: false,
         };
 
         App {
@@ -72,18 +78,22 @@ impl App {
 
     fn switch_mode(&mut self, event: &Event) {
         match event {
-            Event::Key(key) => match key.code {
-                KeyCode::Char('q') => {
-                    self.app_state.should_exit = true;
+            Event::Key(key) => {
+                if key.kind == KeyEventKind::Press {
+                    match key.code {
+                        KeyCode::Char('q') => {
+                            self.app_state.should_exit = true;
+                        }
+                        KeyCode::Char('e') => {
+                            self.app_state.mode = AppMode::Edit;
+                        }
+                        KeyCode::Char('s') => {
+                            self.app_state.mode = AppMode::Select;
+                        }
+                        _ => {}
+                    }
                 }
-                KeyCode::Char('e') => {
-                    self.app_state.mode = AppMode::Edit;
-                }
-                KeyCode::Char('s') => {
-                    self.app_state.mode = AppMode::Select;
-                }
-                _ => {}
-            },
+            }
             _ => {}
         }
     }
@@ -106,6 +116,7 @@ impl App {
         while self.app_state.should_exit != true {
             let result = terminal.draw(|f: &mut Frame| {
                 let inner_area = self.render_outer_block(f);
+
                 let horizontal_chunks = Layout::new(
                     Direction::Horizontal,
                     vec![Constraint::Percentage(30), Constraint::Percentage(70)],
@@ -113,14 +124,22 @@ impl App {
                 .split(inner_area);
                 self.view_manager.snippet_list_component.render(
                     horizontal_chunks[0],
-                    f.buffer_mut(),
+                    f,
                     &self.app_state,
                 );
-                self.view_manager.editor_component.render(
-                    horizontal_chunks[1],
-                    f.buffer_mut(),
-                    &self.app_state,
-                );
+                self.view_manager
+                    .editor_component
+                    .render(horizontal_chunks[1], f, &self.app_state);
+                // update current area
+                match self.app_state.mode {
+                    AppMode::Select => {
+                        self.app_state.current_area = horizontal_chunks[0];
+                    }
+                    AppMode::Edit => {
+                        self.app_state.current_area = horizontal_chunks[1];
+                    }
+                    _ => {}
+                }
             });
             match result {
                 Ok(_) => {}
@@ -139,12 +158,12 @@ impl App {
                             if self.app_state.mode == AppMode::Command {
                                 self.switch_mode(&event);
                             }
-                            if self.app_state.mode == AppMode::Select {
+                            else if self.app_state.mode == AppMode::Select {
                                 self.view_manager
                                     .snippet_list_component
                                     .handle_event(&event, &mut self.app_state);
                             }
-                            if self.app_state.mode == AppMode::Edit {
+                            else if self.app_state.mode == AppMode::Edit {
                                 self.view_manager
                                     .editor_component
                                     .handle_event(&event, &mut self.app_state);
