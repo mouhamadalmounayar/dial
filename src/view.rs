@@ -51,6 +51,7 @@ impl Component for SnippetListComponent {
     }
 
     fn handle_event(&mut self, event: &Event, state: &mut AppState) {
+        state.should_show_cursor = false;
         match event {
             Event::Key(key) => match key.code {
                 KeyCode::Char('j') => {
