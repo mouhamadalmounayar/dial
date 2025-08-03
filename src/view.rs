@@ -1,6 +1,5 @@
 use crate::app::{AppState, Snippet};
 use crate::editor::GapBuffer;
-use log::info;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
@@ -111,10 +110,6 @@ pub struct EditorComponent {
 
 impl Component for EditorComponent {
     fn render(&mut self, area: Rect, frame: &mut Frame, state: &AppState) {
-        if state.should_show_cursor {
-            info!("Showing cursor at {:?}", state.cursor_coordinates);
-            frame.set_cursor_position(state.cursor_coordinates);
-        }
         // sync local state with global state by reinitializing the gap_buffer if the selected_index changes.
         if self.selected_index != Some(state.selected_index) {
             let content = state
@@ -154,7 +149,7 @@ impl Component for EditorComponent {
             .collect();
         let block = Block::default().borders(Borders::ALL).title(" Editor ");
         let paragraph = Paragraph::new(buffer_widget).block(block);
-        frame.render_widget(paragraph, area); 
+        frame.render_widget(paragraph, area);
     }
 
     fn handle_event(&mut self, event: &Event, state: &mut AppState) {
@@ -220,6 +215,15 @@ impl EditorComponent {
             syntax_set,
             theme_set,
         }
+    }
+
+    pub fn sync_buffer_to_state(&mut self, state: &mut AppState) {
+        let gap_buffer = self
+            .gap_buffer
+            .as_ref()
+            .expect("buffer should be defined at this point");
+        state.snippet_list[state.selected_index].code =
+            gap_buffer.buffer.iter().filter(|&&c| c != '\0').collect();
     }
 }
 

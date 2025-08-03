@@ -1,3 +1,6 @@
+use crate::persistence::{load_snippets, save_snippets};
+use crate::view::{Component, ViewManager};
+use anyhow::{Context, Result};
 use log::error;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -5,9 +8,9 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Widget},
 };
+use serde::{Deserialize, Serialize};
 
-use crate::view::{Component, ViewManager};
-
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Snippet {
     pub language: String,
     pub code: String,
@@ -47,19 +50,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        // I am mocking the snippet list values for now...
-        let snippet_list = vec![
-            Snippet {
-                language: String::from("py"),
-                code: String::from("print() \n for i in range () "),
-                title: String::from("Print function"),
-            },
-            Snippet {
-                language: String::from("rs"),
-                code: String::from("println!()"),
-                title: String::from("Print macro"),
-            },
-        ];
+        let snippet_list = load_snippets().expect("snippet_list should not be empty");
         let app_state = AppState {
             snippet_list,
             selected_index: 0,
@@ -112,58 +103,61 @@ impl App {
         inner_area
     }
 
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) {
+    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<(), anyhow::Error> {
         while self.app_state.should_exit != true {
-            let result = terminal.draw(|f: &mut Frame| {
-                let inner_area = self.render_outer_block(f);
+            terminal
+                .draw(|f: &mut Frame| {
+                    let inner_area = self.render_outer_block(f);
 
-                let horizontal_chunks = Layout::new(
-                    Direction::Horizontal,
-                    vec![Constraint::Percentage(30), Constraint::Percentage(70)],
-                )
-                .split(inner_area);
-                self.view_manager.snippet_list_component.render(
-                    horizontal_chunks[0],
-                    f,
-                    &self.app_state,
-                );
-                self.view_manager
-                    .editor_component
-                    .render(horizontal_chunks[1], f, &self.app_state);
-                // update current area
-                match self.app_state.mode {
-                    AppMode::Select => {
-                        self.app_state.current_area = horizontal_chunks[0];
+                    let horizontal_chunks = Layout::new(
+                        Direction::Horizontal,
+                        vec![Constraint::Percentage(30), Constraint::Percentage(70)],
+                    )
+                    .split(inner_area);
+                    self.view_manager.snippet_list_component.render(
+                        horizontal_chunks[0],
+                        f,
+                        &self.app_state,
+                    );
+                    self.view_manager.editor_component.render(
+                        horizontal_chunks[1],
+                        f,
+                        &self.app_state,
+                    );
+                    // update current area
+                    match self.app_state.mode {
+                        AppMode::Select => {
+                            self.app_state.current_area = horizontal_chunks[0];
+                        }
+                        AppMode::Edit => {
+                            self.app_state.current_area = horizontal_chunks[1];
+                        }
+                        _ => {}
                     }
-                    AppMode::Edit => {
-                        self.app_state.current_area = horizontal_chunks[1];
+                    if self.app_state.should_show_cursor {
+                        f.set_cursor_position(self.app_state.cursor_coordinates);
                     }
-                    _ => {}
-                }
-            });
-            match result {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("There was an error while calling draw {})", e);
-                }
-            }
+                })
+                .with_context(|| "could not draw frame")?;
             let result = event::read();
             match result {
                 Ok(event) => match event {
                     Event::Key(key) => match key.code {
                         KeyCode::Esc => {
                             self.app_state.mode = AppMode::Command;
+                            self.view_manager
+                                .editor_component
+                                .sync_buffer_to_state(&mut self.app_state);
+                            save_snippets(&self.app_state.snippet_list[..])?;
                         }
                         _ => {
                             if self.app_state.mode == AppMode::Command {
                                 self.switch_mode(&event);
-                            }
-                            else if self.app_state.mode == AppMode::Select {
+                            } else if self.app_state.mode == AppMode::Select {
                                 self.view_manager
                                     .snippet_list_component
                                     .handle_event(&event, &mut self.app_state);
-                            }
-                            else if self.app_state.mode == AppMode::Edit {
+                            } else if self.app_state.mode == AppMode::Edit {
                                 self.view_manager
                                     .editor_component
                                     .handle_event(&event, &mut self.app_state);
@@ -177,5 +171,6 @@ impl App {
                 }
             }
         }
+        Ok(())
     }
 }

@@ -1,6 +1,8 @@
 mod app;
 mod editor;
+mod persistence;
 mod view;
+
 use log::error;
 use simplelog::{Config, WriteLogger};
 use std::fs::File;
