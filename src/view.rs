@@ -1,14 +1,15 @@
 use crate::app::{AppState, Snippet};
 use crate::editor::GapBuffer;
+use log::info;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::{
-    buffer::Buffer,
+    Frame,
     layout::Rect,
     style::{Style, Stylize},
     text::Line,
-    widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
+    widgets::{Block, Borders, List, ListItem, ListState},
 };
 use syntect::{
     easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet, util::LinesWithEndings,
@@ -17,7 +18,7 @@ use syntect::{
 use syntect_tui::into_span;
 
 pub trait Component {
-    fn render(&mut self, area: Rect, buff: &mut Buffer, state: &AppState);
+    fn render(&mut self, area: Rect, frame: &mut Frame, state: &AppState);
     fn handle_event(&mut self, event: &Event, state: &mut AppState);
 }
 
@@ -34,7 +35,7 @@ impl SnippetListComponent {
 }
 
 impl Component for SnippetListComponent {
-    fn render(&mut self, area: Rect, buff: &mut Buffer, state: &AppState) {
+    fn render(&mut self, area: Rect, frame: &mut Frame, state: &AppState) {
         let index = state.selected_index;
         self.local_state.select(Some(index));
         let items = state
@@ -46,7 +47,7 @@ impl Component for SnippetListComponent {
             .block(block)
             .highlight_symbol(" > ")
             .highlight_style(Style::default().light_blue());
-        StatefulWidget::render(list, area, buff, &mut self.local_state);
+        frame.render_stateful_widget(list, area, &mut self.local_state);
     }
 
     fn handle_event(&mut self, event: &Event, state: &mut AppState) {
@@ -101,14 +102,18 @@ impl From<&Snippet> for ListItem<'_> {
 }
 
 pub struct EditorComponent {
-    gap_buffer: Option<GapBuffer>,
+    pub gap_buffer: Option<GapBuffer>,
     selected_index: Option<usize>,
     pub syntax_set: SyntaxSet,
     pub theme_set: ThemeSet,
 }
 
 impl Component for EditorComponent {
-    fn render(&mut self, area: Rect, buff: &mut Buffer, state: &AppState) {
+    fn render(&mut self, area: Rect, frame: &mut Frame, state: &AppState) {
+        if state.should_show_cursor {
+            info!("Showing cursor at {:?}", state.cursor_coordinates);
+            frame.set_cursor_position(state.cursor_coordinates);
+        }
         // sync local state with global state by reinitializing the gap_buffer if the selected_index changes.
         if self.selected_index != Some(state.selected_index) {
             let content = state
@@ -148,10 +153,10 @@ impl Component for EditorComponent {
             .collect();
         let block = Block::default().borders(Borders::ALL).title(" Editor ");
         let paragraph = Paragraph::new(buffer_widget).block(block);
-        paragraph.render(area, buff)
+        frame.render_widget(paragraph, area); 
     }
 
-    fn handle_event(&mut self, event: &Event, _state: &mut AppState) {
+    fn handle_event(&mut self, event: &Event, state: &mut AppState) {
         let buffer = self
             .gap_buffer
             .as_mut()
@@ -170,7 +175,7 @@ impl Component for EditorComponent {
                             buffer.delete_char();
                         }
                         KeyCode::Left => {
-                            buffer.move_gap(buffer.gap_start - 1);
+                            buffer.move_gap(buffer.gap_start.saturating_sub(1));
                         }
                         KeyCode::Right => {
                             buffer.move_gap(buffer.gap_start + 1);
@@ -183,6 +188,20 @@ impl Component for EditorComponent {
                         }
                         _ => {}
                     }
+                    // update the cursor coordinates after handling the event
+                    let text_before_cursor = &buffer.buffer[..buffer.gap_start];
+                    let line_count = text_before_cursor.iter().filter(|&&c| c == '\n').count() + 1;
+                    let last_newline = text_before_cursor
+                        .iter()
+                        .rposition(|&c| c == '\n')
+                        .map(|p| p + 1)
+                        .unwrap_or(0);
+                    let column = buffer.gap_start - last_newline;
+                    state.cursor_coordinates = (
+                        state.current_area.x + column as u16 + 1,
+                        state.current_area.y + line_count as u16,
+                    );
+                    state.should_show_cursor = true;
                 }
             }
             _ => {}
