@@ -38,7 +38,7 @@ To get started with Dial, you need to have the Rust toolchain installed on your 
 - [x] Syntax Highlighting for Code
 - [x] Responsive Text Editing with Gap Buffer
 - [x] Persist Snippets to Disk
-- [ ] Live Search by Snippet Title
+- [x] Live Search by Snippet Title
 - [ ] Add Snippets from within the TUI
 - [ ] Remove Snippets from within the TUI
 - [ ] Implement Command-Line Interface (CLI)
@@ -66,12 +66,12 @@ You can manually add or edit snippets in this file. The expected format for each
     {
         "language": "rust",
         "title": "Rust Hello World",
-        "content": "fn main() {\n    println!(\"Hello, Rust!\");\n}"
+        "code": "fn main() {\n    println!(\"Hello, Rust!\");\n}"
     },
     {
         "language": "py",
         "title": "Simple Python Function",
-        "content": "def greet(name):\n    print(f\"Hello, {name}!\")\n\ngreet(\"World\")"
+        "code": "def greet(name):\n    print(f\"Hello, {name}!\")\n\ngreet(\"World\")"
     }
 ]
 ```
