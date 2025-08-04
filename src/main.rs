@@ -12,7 +12,7 @@ fn main() {
     setup_logger();
     let mut terminal = ratatui::init();
     let mut app = App::new();
-    app.run(&mut terminal);
+    let _ = app.run(&mut terminal);
     ratatui::restore();
 }
 

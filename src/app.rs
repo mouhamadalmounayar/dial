@@ -30,16 +30,69 @@ pub struct AppState {
     pub selected_index: usize,
     pub mode: AppMode,
     pub should_exit: bool,
-    pub cursor_coordinates: (u16, u16),
     pub current_area: Rect,
-    pub should_show_cursor: bool,
+    pub focused_editor: bool,
+    pub focused_search: bool,
+    pub search_query: String,
 }
 
 impl AppState {
     pub fn get_content(&self) -> Option<String> {
+        if let Some(actual_index) = self.get_selected_snippet_index() {
+            self.snippet_list
+                .get(actual_index)
+                .map(|snippet| snippet.code.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn filtered_snippets(&self) -> Vec<(usize, &Snippet)> {
         self.snippet_list
+            .iter()
+            .enumerate()
+            .filter(|(_, snippet)| {
+                snippet
+                    .title
+                    .to_lowercase()
+                    .contains(&self.search_query.to_lowercase())
+            })
+            .collect()
+    }
+
+    pub fn get_selected_snippet_index(&self) -> Option<usize> {
+        self.filtered_snippets()
             .get(self.selected_index)
-            .map(|snippet| snippet.code.clone())
+            .map(|(i, _)| *i)
+    }
+
+    pub fn get_current_snippet(&self) -> Option<&Snippet> {
+        if let Some(actual_index) = self.get_selected_snippet_index() {
+            self.snippet_list.get(actual_index)
+        } else {
+            None
+        }
+    }
+
+    pub fn focus_editor(&mut self) {
+        self.focused_editor = true;
+    }
+
+    pub fn focus_search(&mut self) {
+        self.focused_search = true;
+    }
+
+    pub fn blur_search(&mut self) {
+        self.focused_search = false;
+    }
+
+    pub fn blur_editor(&mut self) {
+        self.focused_editor = false;
+    }
+
+    pub fn blur(&mut self) {
+        self.blur_search();
+        self.blur_editor();
     }
 }
 
@@ -52,13 +105,14 @@ impl App {
     pub fn new() -> Self {
         let snippet_list = load_snippets().expect("snippet_list should not be empty");
         let app_state = AppState {
-            snippet_list,
+            snippet_list: snippet_list.clone(),
+            search_query: String::new(),
             selected_index: 0,
             mode: AppMode::Command,
             should_exit: false,
-            cursor_coordinates: (0, 0),
             current_area: Rect::default(),
-            should_show_cursor: false,
+            focused_editor: false,
+            focused_search: false,
         };
 
         App {
@@ -81,6 +135,7 @@ impl App {
                         KeyCode::Char('s') => {
                             self.app_state.mode = AppMode::Select;
                         }
+                        KeyCode::Char('/') => self.app_state.mode = AppMode::Search,
                         _ => {}
                     }
                 }
@@ -91,7 +146,7 @@ impl App {
 
     fn render_outer_block(&self, f: &mut Frame) -> Rect {
         let mode_text = format!(" Mode: {:?} ", self.app_state.mode);
-        let help_text = " [q] Quit   │  [s] Select Mode   │  [e] Edit Mode ";
+        let help_text = " [q] Quit   │  [s] Select Mode   │  [e] Edit Mode  |  [/] Search";
         let block = Block::new()
             .borders(Borders::ALL)
             .title(" Dial ")
@@ -108,14 +163,23 @@ impl App {
             terminal
                 .draw(|f: &mut Frame| {
                     let inner_area = self.render_outer_block(f);
-
                     let horizontal_chunks = Layout::new(
                         Direction::Horizontal,
                         vec![Constraint::Percentage(30), Constraint::Percentage(70)],
                     )
                     .split(inner_area);
+                    let vertical_chunks = Layout::new(
+                        Direction::Vertical,
+                        vec![Constraint::Percentage(10), Constraint::Percentage(90)],
+                    )
+                    .split(horizontal_chunks[0]);
+                    self.view_manager.search_component.render(
+                        vertical_chunks[0],
+                        f,
+                        &self.app_state,
+                    );
                     self.view_manager.snippet_list_component.render(
-                        horizontal_chunks[0],
+                        vertical_chunks[1],
                         f,
                         &self.app_state,
                     );
@@ -132,10 +196,10 @@ impl App {
                         AppMode::Edit => {
                             self.app_state.current_area = horizontal_chunks[1];
                         }
+                        AppMode::Search => {
+                            self.app_state.current_area = vertical_chunks[0];
+                        }
                         _ => {}
-                    }
-                    if self.app_state.should_show_cursor {
-                        f.set_cursor_position(self.app_state.cursor_coordinates);
                     }
                 })
                 .with_context(|| "could not draw frame")?;
@@ -144,7 +208,9 @@ impl App {
                 Ok(event) => match event {
                     Event::Key(key) => match key.code {
                         KeyCode::Esc => {
+                            // on command mode, unfocus and save
                             self.app_state.mode = AppMode::Command;
+                            self.app_state.blur();
                             self.view_manager
                                 .editor_component
                                 .sync_buffer_to_state(&mut self.app_state);
@@ -160,6 +226,10 @@ impl App {
                             } else if self.app_state.mode == AppMode::Edit {
                                 self.view_manager
                                     .editor_component
+                                    .handle_event(&event, &mut self.app_state);
+                            } else if self.app_state.mode == AppMode::Search {
+                                self.view_manager
+                                    .search_component
                                     .handle_event(&event, &mut self.app_state);
                             }
                         }

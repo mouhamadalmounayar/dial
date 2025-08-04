@@ -86,6 +86,9 @@ impl GapBuffer {
             self.move_gap_right(index);
         }
     }
+    pub fn to_string(&self) -> String {
+        self.buffer.iter().filter(|&&c| c != '\0').collect()
+    }
 }
 
 #[cfg(test)]
