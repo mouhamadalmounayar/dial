@@ -1,3 +1,5 @@
+use std::u16;
+
 use crate::app::{AppState, Snippet};
 use crate::editor::GapBuffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind};
@@ -19,6 +21,7 @@ use syntect_tui::into_span;
 const EDITOR_BUFFER_SIZE: usize = 1024;
 const SEARCH_BUFFER_SIZE: usize = 256;
 const TAB_SIZE: usize = 4;
+const PADDING_SIZE: u16 = 1;
 
 pub trait Component {
     fn render(&mut self, area: Rect, frame: &mut Frame, state: &AppState);
@@ -165,7 +168,7 @@ impl Component for EditorComponent {
             .borders(Borders::ALL)
             .title("  Editor ".blue())
             .border_type(BorderType::Rounded)
-            .padding(Padding::uniform(1));
+            .padding(Padding::uniform(PADDING_SIZE));
         let paragraph = Paragraph::new(buffer_widget).block(block);
         frame.render_widget(paragraph, area);
         if state.focused_editor {
@@ -213,8 +216,8 @@ impl Component for EditorComponent {
                         .unwrap_or(0);
                     let column = buffer.gap_start - last_newline;
                     self.cursor_coordinates = (
-                        state.current_area.x + column as u16 + 1,
-                        state.current_area.y + line_count as u16,
+                        state.current_area.x + PADDING_SIZE + column as u16 + 1,
+                        state.current_area.y + PADDING_SIZE + line_count as u16,
                     );
                     state.focus_editor();
                 }
