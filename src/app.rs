@@ -2,6 +2,10 @@ use crate::persistence::{load_snippets, save_snippets};
 use crate::view::{Component, ViewManager};
 use anyhow::{Context, Result};
 use log::error;
+use ratatui::crossterm::style::Color;
+use ratatui::style::Stylize;
+use ratatui::style::palette::material::BLUE;
+use ratatui::text::Span;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
@@ -146,12 +150,14 @@ impl App {
 
     fn render_outer_block(&self, f: &mut Frame) -> Rect {
         let mode_text = format!(" Mode: {:?} ", self.app_state.mode);
-        let help_text = " [q] Quit   │  [s] Select Mode   │  [e] Edit Mode  |  [/] Search";
+        let help_text = " 󰈆 [q] Quit   │   [s] Select Mode   │  [e] Edit Mode  |   [/] Search ";
         let block = Block::new()
             .borders(Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
             .title(" Dial ")
+            .bold()
             .title_alignment(ratatui::layout::Alignment::Center)
-            .title_bottom(mode_text)
+            .title_bottom(mode_text.bg(Color::DarkBlue).black())
             .title_bottom(help_text);
         let inner_area = block.inner(f.area());
         block.render(f.area(), f.buffer_mut());

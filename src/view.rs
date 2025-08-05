@@ -2,7 +2,7 @@ use crate::app::{AppState, Snippet};
 use crate::editor::GapBuffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::text::Span;
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{BorderType, Padding, Paragraph};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -46,11 +46,13 @@ impl Component for SnippetListComponent {
             .iter()
             .map(|(_, snippet)| ListItem::from(*snippet))
             .collect();
-        let block = Block::new().borders(Borders::all()).title(" Snippets ");
+        let block = Block::new()
+            .borders(Borders::all())
+            .border_type(ratatui::widgets::BorderType::Rounded)
+            .title(" 󰅩 Snippets ".blue());
         let list = List::new(items)
             .block(block)
-            .highlight_symbol(" > ")
-            .highlight_style(Style::default().light_blue());
+            .highlight_style(Style::default().bg(ratatui::style::Color::Black).white());
         frame.render_stateful_widget(list, area, &mut self.local_state);
     }
 
@@ -159,7 +161,11 @@ impl Component for EditorComponent {
                 Line::from(spans)
             })
             .collect();
-        let block = Block::default().borders(Borders::ALL).title(" Editor ");
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title("  Editor ".blue())
+            .border_type(BorderType::Rounded)
+            .padding(Padding::uniform(1));
         let paragraph = Paragraph::new(buffer_widget).block(block);
         frame.render_widget(paragraph, area);
         if state.focused_editor {
@@ -263,7 +269,10 @@ impl SearchComponent {
 
 impl Component for SearchComponent {
     fn render(&mut self, area: Rect, frame: &mut Frame, state: &AppState) {
-        let block = Block::default().title_top(" Search ").borders(Borders::ALL);
+        let block = Block::default()
+            .title_top("  Search ".blue())
+            .border_type(BorderType::Rounded)
+            .borders(Borders::ALL);
         let text: String = self.gap_buffer.to_string();
         let line = Paragraph::new(text).block(block);
         frame.render_widget(line, area);
