@@ -39,7 +39,7 @@ To get started with Dial, you need to have the Rust toolchain installed on your 
 - [x] Responsive Text Editing with Gap Buffer
 - [x] Persist Snippets to Disk
 - [x] Live Search by Snippet Title
-- [ ] Add Snippets from within the TUI
+- [x] Add Snippets from within the TUI
 - [ ] Remove Snippets from within the TUI
 - [ ] Implement Command-Line Interface (CLI)
 - [ ] Add Snippets from the Command Line
