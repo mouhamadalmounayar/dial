@@ -9,11 +9,11 @@ use ratatui::text::Span;
 use ratatui::widgets::block::title;
 use ratatui::widgets::{BorderType, Padding, Paragraph};
 use ratatui::{
-    Frame,
     layout::Rect,
     style::{Style, Stylize},
     text::Line,
     widgets::{Block, Borders, List, ListItem, ListState},
+    Frame,
 };
 use syntect::{
     easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet, util::LinesWithEndings,
@@ -25,7 +25,6 @@ const EDITOR_BUFFER_SIZE: usize = 1024;
 const SEARCH_BUFFER_SIZE: usize = 256;
 const TAB_SIZE: usize = 4;
 const PADDING_SIZE: u16 = 1;
-const POPUP_PADDING_SIZE: u16 = 3;
 
 pub trait Component {
     fn render(&mut self, area: Rect, frame: &mut Frame, state: &AppState);
