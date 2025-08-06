@@ -1,9 +1,12 @@
 use std::u16;
 
-use crate::app::{AppState, Snippet};
+use crate::app::{AppMode, AppState, Snippet};
 use crate::editor::GapBuffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind};
+use ratatui::crossterm::terminal::Clear;
+use ratatui::layout::{Constraint, Layout};
 use ratatui::text::Span;
+use ratatui::widgets::block::title;
 use ratatui::widgets::{BorderType, Padding, Paragraph};
 use ratatui::{
     Frame,
@@ -22,6 +25,7 @@ const EDITOR_BUFFER_SIZE: usize = 1024;
 const SEARCH_BUFFER_SIZE: usize = 256;
 const TAB_SIZE: usize = 4;
 const PADDING_SIZE: u16 = 1;
+const POPUP_PADDING_SIZE: u16 = 3;
 
 pub trait Component {
     fn render(&mut self, area: Rect, frame: &mut Frame, state: &AppState);
@@ -51,8 +55,9 @@ impl Component for SnippetListComponent {
             .collect();
         let block = Block::new()
             .borders(Borders::all())
-            .border_type(ratatui::widgets::BorderType::Rounded)
-            .title(" 󰅩 Snippets ".blue());
+            .title(" 󰅩 Snippets ".blue())
+            .title_bottom(" [a]: Add Snippet  ")
+            .title_alignment(ratatui::layout::Alignment::Center);
         let list = List::new(items)
             .block(block)
             .highlight_style(Style::default().bg(ratatui::style::Color::Black).white());
@@ -70,6 +75,11 @@ impl Component for SnippetListComponent {
                 KeyCode::Char('k') => {
                     if key.kind == KeyEventKind::Press {
                         self.select_previous(state);
+                    }
+                }
+                KeyCode::Char('a') => {
+                    if key.kind == KeyEventKind::Press {
+                        state.mode = AppMode::Popup
                     }
                 }
                 _ => {}
@@ -167,7 +177,6 @@ impl Component for EditorComponent {
         let block = Block::default()
             .borders(Borders::ALL)
             .title("  Editor ".blue())
-            .border_type(BorderType::Rounded)
             .padding(Padding::uniform(PADDING_SIZE));
         let paragraph = Paragraph::new(buffer_widget).block(block);
         frame.render_widget(paragraph, area);
@@ -274,7 +283,6 @@ impl Component for SearchComponent {
     fn render(&mut self, area: Rect, frame: &mut Frame, state: &AppState) {
         let block = Block::default()
             .title_top("  Search ".blue())
-            .border_type(BorderType::Rounded)
             .borders(Borders::ALL);
         let text: String = self.gap_buffer.to_string();
         let line = Paragraph::new(text).block(block);
@@ -314,10 +322,186 @@ impl Component for SearchComponent {
     }
 }
 
+#[derive(PartialEq)]
+enum Input {
+    Title,
+    Language,
+}
+
+pub struct AddSnippetPopupComponent {
+    title_input: GapBuffer,
+    language_input: GapBuffer,
+    cursor_position: (u16, u16),
+    focused_input: Input,
+    current_area: Rect,
+    should_show_cursor: bool,
+    title_area: Rect,
+    language_area: Rect,
+}
+
+impl Component for AddSnippetPopupComponent {
+    fn render(&mut self, _area: Rect, frame: &mut Frame, _state: &AppState) {
+        let width = frame.area().width / 3;
+        let height = frame.area().height / 3;
+        let area = Rect::new(
+            frame.area().width / 2 - width / 2,
+            frame.area().height / 2 - height / 2,
+            width,
+            height,
+        );
+        let layout = Layout::new(
+            ratatui::layout::Direction::Vertical,
+            vec![
+                Constraint::Percentage(30),
+                Constraint::Percentage(30),
+                Constraint::Percentage(20),
+            ],
+        )
+        // position in the center of the screen
+        .split(area);
+
+        frame.render_widget(ratatui::widgets::Clear, area);
+
+        // block definitions
+        let title_block = Block::default()
+            .title(" Snippet Title ")
+            .title_alignment(ratatui::layout::Alignment::Left)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(ratatui::style::Color::Cyan))
+            .bg(ratatui::style::Color::Black)
+            .border_type(BorderType::Rounded);
+
+        let language_block = Block::default()
+            .title(" Language Extension ")
+            .title_alignment(ratatui::layout::Alignment::Left)
+            .bg(ratatui::style::Color::Black)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(ratatui::style::Color::Cyan))
+            .border_type(BorderType::Rounded);
+
+        let title = Paragraph::new(self.title_input.to_string()).block(title_block);
+        let language = Paragraph::new(self.language_input.to_string()).block(language_block);
+
+        let help_text = Block::default()
+            .title("[A]: Add | [Esc]: Close")
+            .title_alignment(ratatui::layout::Alignment::Center)
+            .fg(ratatui::style::Color::Cyan)
+            .bg(ratatui::style::Color::Black);
+
+        frame.render_widget(language, layout[0]);
+        frame.render_widget(title, layout[1]);
+        frame.render_widget(help_text, layout[2]);
+
+        //initialize areas
+        self.title_area = layout[1];
+        self.language_area = layout[0];
+
+        match self.focused_input {
+            Input::Title => {
+                self.current_area = layout[1];
+            }
+            Input::Language => {
+                self.current_area = layout[0];
+            }
+        }
+
+        if self.should_show_cursor {
+            assert!(self.cursor_position != (0, 0));
+            frame.set_cursor_position(self.cursor_position);
+        }
+    }
+
+    fn handle_event(&mut self, event: &Event, state: &mut AppState) {
+        match event {
+            Event::Key(key) => {
+                if key.kind == KeyEventKind::Press {
+                    match key.code {
+                        KeyCode::Char('A') => {
+                            let snippet = Snippet {
+                                title: self.title_input.to_string(),
+                                language: self.language_input.to_string(),
+                                code: String::new(),
+                            };
+                            state.snippet_list.push(snippet);
+                            state.mode = AppMode::Command;
+                        }
+                        KeyCode::Char(c) => {
+                            self.insert_char(c);
+                            self.should_show_cursor = true;
+                        }
+                        KeyCode::Backspace => {
+                            self.delete_char();
+                            self.should_show_cursor = true;
+                        }
+                        KeyCode::Enter => self.toggle_focused_input(),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl AddSnippetPopupComponent {
+    fn new() -> Self {
+        AddSnippetPopupComponent {
+            title_input: GapBuffer::from_str("", SEARCH_BUFFER_SIZE),
+            language_input: GapBuffer::from_str("", SEARCH_BUFFER_SIZE),
+            cursor_position: (0, 0),
+            focused_input: Input::Language,
+            current_area: Rect::default(),
+            should_show_cursor: false,
+            title_area: Rect::default(),
+            language_area: Rect::default(),
+        }
+    }
+
+    fn active_buffer(&mut self) -> &mut GapBuffer {
+        match self.focused_input {
+            Input::Title => &mut self.title_input,
+            Input::Language => &mut self.language_input,
+        }
+    }
+
+    fn insert_char(&mut self, c: char) {
+        let buffer = self.active_buffer();
+        buffer.insert_char(c);
+        let gap_start = buffer.gap_start;
+        self.update_cursor_position(gap_start as u16);
+    }
+
+    fn delete_char(&mut self) {
+        let buffer = self.active_buffer();
+        buffer.delete_char();
+        let gap_start = buffer.gap_start;
+        self.update_cursor_position(gap_start as u16);
+    }
+
+    fn update_cursor_position(&mut self, gap_start: u16) {
+        let x = self.current_area.x + gap_start as u16 + 1;
+        let y = self.current_area.y + 1;
+        self.cursor_position = (x, y);
+    }
+
+    fn toggle_focused_input(&mut self) {
+        if self.focused_input == Input::Title {
+            self.focused_input = Input::Language;
+            self.current_area = self.language_area;
+            self.update_cursor_position(self.language_input.gap_start as u16);
+        } else {
+            self.focused_input = Input::Title;
+            self.current_area = self.title_area;
+            self.update_cursor_position(self.title_input.gap_start as u16);
+        }
+    }
+}
+
 pub struct ViewManager {
     pub snippet_list_component: SnippetListComponent,
     pub editor_component: EditorComponent,
     pub search_component: SearchComponent,
+    pub add_snippet_popup_component: AddSnippetPopupComponent,
 }
 
 impl ViewManager {
@@ -326,6 +510,7 @@ impl ViewManager {
             snippet_list_component: SnippetListComponent::new(),
             editor_component: EditorComponent::new(),
             search_component: SearchComponent::new(),
+            add_snippet_popup_component: AddSnippetPopupComponent::new(),
         }
     }
 }

@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use log::error;
 use ratatui::crossterm::style::Color;
 use ratatui::style::Stylize;
-use ratatui::style::palette::material::BLUE;
 use ratatui::text::Span;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -27,6 +26,7 @@ pub enum AppMode {
     Search,
     Edit,
     Command,
+    Popup,
 }
 
 pub struct AppState {
@@ -194,6 +194,14 @@ impl App {
                         f,
                         &self.app_state,
                     );
+                    // only render popup in popup mode
+                    if self.app_state.mode == AppMode::Popup {
+                        self.view_manager.add_snippet_popup_component.render(
+                            f.area(),
+                            f,
+                            &self.app_state,
+                        )
+                    }
                     // update current area
                     match self.app_state.mode {
                         AppMode::Select => {
@@ -236,6 +244,10 @@ impl App {
                             } else if self.app_state.mode == AppMode::Search {
                                 self.view_manager
                                     .search_component
+                                    .handle_event(&event, &mut self.app_state);
+                            } else if self.app_state.mode == AppMode::Popup {
+                                self.view_manager
+                                    .add_snippet_popup_component
                                     .handle_event(&event, &mut self.app_state);
                             }
                         }
