@@ -1,5 +1,7 @@
 # Dial
 Dial is a code snippet manager built using rust and ratatui.
+<img width="2558" height="1438" alt="image" src="https://github.com/user-attachments/assets/9065b349-5d47-4eca-baa8-c84db345ae3a" />
+
 
 ## Features
 
