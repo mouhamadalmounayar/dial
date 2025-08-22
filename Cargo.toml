@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 readme = "README.md"
-
+description = "A terminal-based code snippet manager and viewer built with ratatui."
 [dependencies]
 anyhow = "1.0.98"
 crossterm = "0.29.0"
