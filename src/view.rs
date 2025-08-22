@@ -3,17 +3,15 @@ use std::u16;
 use crate::app::{AppMode, AppState, Snippet};
 use crate::editor::GapBuffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind};
-use ratatui::crossterm::terminal::Clear;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::text::Span;
-use ratatui::widgets::block::title;
 use ratatui::widgets::{BorderType, Padding, Paragraph};
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Style, Stylize},
     text::Line,
     widgets::{Block, Borders, List, ListItem, ListState},
-    Frame,
 };
 use syntect::{
     easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet, util::LinesWithEndings,

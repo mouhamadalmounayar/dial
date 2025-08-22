@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use log::error;
 use ratatui::crossterm::style::Color;
 use ratatui::style::Stylize;
-use ratatui::text::Span;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
