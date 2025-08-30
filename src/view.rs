@@ -349,9 +349,9 @@ impl Component for AddSnippetPopupComponent {
         let layout = Layout::new(
             ratatui::layout::Direction::Vertical,
             vec![
+                Constraint::Percentage(35),
+                Constraint::Percentage(35),
                 Constraint::Percentage(30),
-                Constraint::Percentage(30),
-                Constraint::Percentage(20),
             ],
         )
         // position in the center of the screen
@@ -364,16 +364,12 @@ impl Component for AddSnippetPopupComponent {
             .title(" Snippet Title ")
             .title_alignment(ratatui::layout::Alignment::Left)
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(ratatui::style::Color::Cyan))
-            .bg(ratatui::style::Color::Black)
             .border_type(BorderType::Rounded);
 
         let language_block = Block::default()
             .title(" Language Extension ")
             .title_alignment(ratatui::layout::Alignment::Left)
-            .bg(ratatui::style::Color::Black)
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(ratatui::style::Color::Cyan))
             .border_type(BorderType::Rounded);
 
         let title = Paragraph::new(self.title_input.to_string()).block(title_block);
@@ -381,9 +377,7 @@ impl Component for AddSnippetPopupComponent {
 
         let help_text = Block::default()
             .title("[A]: Add | [Esc]: Close")
-            .title_alignment(ratatui::layout::Alignment::Center)
-            .fg(ratatui::style::Color::Cyan)
-            .bg(ratatui::style::Color::Black);
+            .title_alignment(ratatui::layout::Alignment::Center);
 
         frame.render_widget(language, layout[0]);
         frame.render_widget(title, layout[1]);
