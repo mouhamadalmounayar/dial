@@ -15,6 +15,20 @@ Dial is a code snippet manager built using rust and ratatui.
 
 ## Installation
 
+Dial is available on crates.io, so it can be installed using cargo. 
+
+```bash
+cargo install dial
+```
+
+Then, run the app.
+
+```bash
+dial
+```
+
+## Build From Source
+
 To get started with Dial, you need to have the Rust toolchain installed on your system.
 
 1.  **Clone the repository:**
