@@ -51,7 +51,8 @@ impl AppState {
     }
 
     pub fn filtered_snippets(&self) -> Vec<(usize, &Snippet)> {
-        self.snippet_list
+        let filtered_list: Vec<(usize, &Snippet)> = self
+            .snippet_list
             .iter()
             .enumerate()
             .filter(|(_, snippet)| {
@@ -60,7 +61,12 @@ impl AppState {
                     .to_lowercase()
                     .contains(&self.search_query.to_lowercase())
             })
-            .collect()
+            .collect();
+
+        if filtered_list.len() == 0 {
+            return self.snippet_list.iter().enumerate().collect();
+        }
+        filtered_list
     }
 
     pub fn get_selected_snippet_index(&self) -> Option<usize> {
